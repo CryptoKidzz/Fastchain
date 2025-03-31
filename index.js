@@ -1,6 +1,5 @@
 const chalk = require('chalk').default;
 const axios = require('axios');
-const banner = require('./config/banner')
 const fs = require('fs');
 
 const BASE_URL = 'https://api.fastchain.org/v2/check-in';
@@ -8,16 +7,23 @@ const INFO_URL = 'https://api.fastchain.org/v2/myinfo';
 
 function getBearerTokens() {
     try {
-        const tokens = fs.readFileSync('data.txt', 'utf8').trim().split('\n');
-        if (tokens.length) {
-            console.log(chalk.green(`Found ${tokens.length}`));
+        const tokens = fs.readFileSync('data.txt', 'utf8')
+            .split('\n')         // Pisahkan per baris
+            .map(t => t.trim())  // Hapus spasi ekstra di awal/akhir
+            .filter(Boolean);    // Hapus baris kosong
+        
+        if (tokens.length > 0) {
+            console.log(chalk.green(`Found ${tokens.length} tokens`));
             return tokens;
+        } else {
+            console.log(chalk.red('No tokens found in data.txt'));
         }
     } catch (error) {
-        console.log(chalk.red('No token found in token.txt'), error.message);
+        console.log(chalk.red('Error reading data.txt'), error.message);
     }
     return [];
 }
+
 
 async function getUserInfo(headers) {
     try {
@@ -41,6 +47,7 @@ async function checkIn(headers) {
 }
 
 function convertToWIB(isoString) {
+    if (!isoString) return 'N/A';
     try {
         const date = new Date(isoString);
         return new Intl.DateTimeFormat('id-ID', {
@@ -58,12 +65,14 @@ function convertToWIB(isoString) {
 }
 
 function getWaitTime(lastCheckIn) {
+    if (!lastCheckIn) return 0; // Jika belum pernah check-in, langsung bisa check-in
+
     const lastCheckDate = new Date(lastCheckIn);
     const nextCheckDate = new Date(lastCheckDate.getTime() + 24 * 60 * 60 * 1000);
     const now = new Date();
 
-    const waitTime = nextCheckDate - now;
-    return waitTime > 0 ? waitTime : 0;
+    const waitTime = Math.max(nextCheckDate - now, 0);
+    return waitTime;
 }
 
 async function processAccount(token) {
@@ -81,17 +90,21 @@ async function processAccount(token) {
     let waitTime = 0;
 
     if (!userInfo.lastCheckIn) {
-        // Jika akun belum pernah check-in, langsung lakukan check-in
-        console.log(chalk.yellow('No last check-in found. Assuming first-time check-in.'));
-        console.log(chalk.green('Checking in now...'));
+        console.log(chalk.yellow('No last check-in found. Checking in now...'));
         await checkIn(headers);
-        return 0; // Tidak perlu menunggu
+        return 0;
     } else {
         lastCheckInWIB = convertToWIB(userInfo.lastCheckIn);
         waitTime = getWaitTime(userInfo.lastCheckIn);
     }
 
     console.log(chalk.blue(`Last check-in: ${lastCheckInWIB}`));
+
+    if (waitTime === 0) {
+        console.log(chalk.green('Time to check-in!'));
+        await checkIn(headers);
+        return 0;
+    }
 
     return waitTime;
 }
@@ -101,7 +114,12 @@ async function autoCheckIn() {
         console.log(chalk.cyan('Starting check-in process...'));
         const tokens = getBearerTokens();
 
-        let minWaitTime = 24 * 60 * 60 * 1000; // Default 24 jam
+        if (tokens.length === 0) {
+            console.log(chalk.red('No tokens available. Exiting...'));
+            return;
+        }
+
+        let minWaitTime = 24 * 60 * 60 * 1000;
 
         for (const token of tokens) {
             const waitTime = await processAccount(token);
@@ -111,7 +129,7 @@ async function autoCheckIn() {
         }
 
         console.log(chalk.green('All accounts have been processed.'));
-        console.log(chalk.magenta(`Waiting ${minWaitTime / 1000 / 60} minutes for the next check-in...`));
+        console.log(chalk.magenta(`Waiting ${Math.round(minWaitTime / 1000 / 60)} minutes for the next check-in...`));
         await new Promise(resolve => setTimeout(resolve, minWaitTime));
     }
 }
