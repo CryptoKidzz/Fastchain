@@ -65,15 +65,16 @@ function convertToWIB(isoString) {
 }
 
 function getWaitTime(lastCheckIn) {
-    if (!lastCheckIn) return 0; // Jika belum pernah check-in, langsung bisa check-in
+    if (!lastCheckIn) return 0; // Jika tidak ada lastCheckIn, langsung check-in
 
     const lastCheckDate = new Date(lastCheckIn);
-    const nextCheckDate = new Date(lastCheckDate.getTime() + 24 * 60 * 60 * 1000);
-    const now = new Date();
+    const nextCheckDate = new Date(lastCheckDate.getTime() + (24 * 60 * 60 * 1000)); // Tambah 24 jam
+    const now = new Date(); // Waktu saat ini
 
-    const waitTime = Math.max(nextCheckDate - now, 0);
-    return waitTime;
+    const waitTime = nextCheckDate - now;
+    return waitTime > 0 ? waitTime : 0; // Jika waktunya negatif, set ke 0
 }
+
 
 async function processAccount(token) {
     console.log(chalk.yellow(`Processing account with token: ${token.slice(0, 10)}...`));
