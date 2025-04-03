@@ -25,4 +25,4 @@ node index.js
 ```
 
 ## License
-ISC License# Fastchain
+ISC License
